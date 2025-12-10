@@ -934,7 +934,3 @@ class ModelRegistry:
             return result.stdout.strip()
         except:
             return None
-
-
-# Continue with main orchestrator in next message...
-print("Part 2 loaded successfully - Experimental framework, baselines, visualization, and analytics ready")

@@ -991,11 +991,11 @@ def main():
         print("- monitoring/: Real-time metrics and dashboard")
         print("- models/: Trained model checkpoints")
         print("- ablation_studies/: Component importance analysis")
-        print("\nNext Steps:")
-        print("1. Review experiment_report.txt for detailed analysis")
-        print("2. Check monitoring/dashboard.png for system health")
-        print("3. Use learning_curves.png for publication-ready figures")
-        print("4. Deploy models/ directory for production use")
+        # print("\nNext Steps:")
+        # print("1. Review experiment_report.txt for detailed analysis")
+        # print("2. Check monitoring/dashboard.png for system health")
+        # print("3. Use learning_curves.png for publication-ready figures")
+        # print("4. Deploy models/ directory for production use")
     
     except Exception as e:
         logger.error(f"Main execution failed: {e}")
@@ -1006,5 +1006,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-print("\nPart 3 loaded successfully - Production orchestrator ready")

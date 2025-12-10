@@ -620,7 +620,7 @@ def main():
     
     num_episodes = input("\nHow many episodes to demonstrate? (1-5, default=2): ").strip()
     num_episodes = int(num_episodes) if num_episodes.isdigit() else 2
-    num_episodes = min(max(1, num_episodes), 5)
+    num_episodes = min(max(1, num_episodes), 50)
     
     print(f"\n🚀 Running {num_episodes} episode(s) with complete flow...\n")
     
