@@ -60,11 +60,11 @@ The system implements a hierarchical multi-agent architecture with two layers:
 - Business Advisor: Actionable recommendations
 
 ### 1.2 Architecture Diagram
-![Arch Diagram](./images/simple_arch_diagram.png)
+![Arch Diagram](../images/simple_arch_diagram.png)
 
 ### 1.3 Data Flow Per Timestep
 
-![Data Flow Diagram](./images/simple_dataflow_diagram.png)
+![Data Flow Diagram](../images/simple_dataflow_diagram.png)
 
 The system executes the following cycle for each timestep:
 
