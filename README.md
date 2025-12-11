@@ -1,7 +1,7 @@
 # Multi-Agent Reinforcement Learning System with CrewAI
 
 > **Production-Ready Implementation for Ad Auction Optimization**  
-> Author: Akshay | Version: 2.0 | December 2025
+> Author: Akshay | December 2025
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
@@ -129,9 +129,9 @@ python -c "import torch; import crewai; print('Installation successful!')"
 ### Basic Training
 
 ```python
-from agent_utils import EnhancedControllerAgent, EnhancedBiddingAgent
-from experiment_utils import EnhancedBudgetAgent, EnhancedSimulationAgent
-from orchestration_utils import ProductionMultiAgentSystem
+from src.agent_utils import EnhancedControllerAgent, EnhancedBiddingAgent
+from src.experiment_utils import EnhancedBudgetAgent, EnhancedSimulationAgent
+from src.orchestration_utils import ProductionMultiAgentSystem
 
 # Initialize system
 config = {
@@ -159,7 +159,7 @@ print(f"Final Performance: {eval_reward:.2f}")
 ### Running Experiments
 
 ```python
-from orchestration_utils import ProductionMultiAgentSystem
+from src.orchestration_utils import ProductionMultiAgentSystem
 
 system = ProductionMultiAgentSystem()
 
@@ -175,7 +175,7 @@ system.run_comprehensive_experiments()
 ### Hyperparameter Optimization
 
 ```python
-from experiment_utils import HyperparameterOptimizer
+from src.experiment_utils import HyperparameterOptimizer
 
 optimizer = HyperparameterOptimizer(n_trials=50)
 best_params = optimizer.optimize()
@@ -187,7 +187,7 @@ print(f"Best hyperparameters: {best_params}")
 ### A/B Testing
 
 ```python
-from orchestration_utils import ABTestFramework
+from src.orchestration_utils import ABTestFramework
 
 ab_test = ABTestFramework()
 
@@ -275,7 +275,7 @@ monitoring_config = {
 ### Comprehensive Test Suite
 
 ```python
-from orchestration_utils import TestSuite
+from src.orchestration_utils import TestSuite
 
 test_suite = TestSuite()
 
@@ -290,12 +290,6 @@ test_suite.test_error_handling(system, env)
 
 # Generate report
 print(test_suite.generate_report())
-```
-
-### Running All Tests
-
-```bash
-python -m pytest tests/ -v --cov=src
 ```
 
 ---
