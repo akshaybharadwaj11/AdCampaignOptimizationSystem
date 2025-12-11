@@ -27,7 +27,7 @@ import time
 from collections import defaultdict
 import warnings
 warnings.filterwarnings('ignore')
-from src.experiment_utils import *
+from experiment_utils import *
 logger = logging.getLogger(__name__)
 
 
@@ -611,7 +611,7 @@ class TestSuite:
 class ProductionMultiAgentSystem:
     """Complete production-ready multi-agent RL system"""
     def __init__(self, config: Dict[str, Any] = None):
-        from src.agent_utils import (EnhancedControllerAgent, EnhancedBiddingAgent, 
+        from agent_utils import (EnhancedControllerAgent, EnhancedBiddingAgent, 
                           EnhancedBudgetAgent, EnhancedSimulationAgent,
                           AgentConfig, EnvironmentConfig, Action)
         
@@ -813,7 +813,7 @@ class ProductionMultiAgentSystem:
                     bid, _ = self.bidding_agent.select_bid(state_array, training=False)
                     allocation = self.budget_agent.select_allocation(state_array, training=False)
                 
-                from src.agent_utils import Action
+                from agent_utils import Action
                 action = Action(bid_amount=bid, budget_allocation=allocation, agent_type="both")
                 
                 next_state, reward, done, info = self.env.step(action)
@@ -871,11 +871,11 @@ class ProductionMultiAgentSystem:
         fixed_agent = FixedStrategyAgent(state_dim=10)
         greedy_agent = GreedyAgent(state_dim=10)
         
-        self.experiment_runner.run_baseline(random_agent, self.env, num_episodes=100, 
+        self.experiment_runner.run_baseline(random_agent, self.env, num_episodes=1000, 
                                             agent_name="Random")
-        self.experiment_runner.run_baseline(fixed_agent, self.env, num_episodes=100,
+        self.experiment_runner.run_baseline(fixed_agent, self.env, num_episodes=1000,
                                             agent_name="Fixed Strategy")
-        self.experiment_runner.run_baseline(greedy_agent, self.env, num_episodes=100,
+        self.experiment_runner.run_baseline(greedy_agent, self.env, num_episodes=1000,
                                             agent_name="Greedy")
         
         # Add current system to comparison
@@ -885,7 +885,7 @@ class ProductionMultiAgentSystem:
         trained_spend = []
         trained_roi = []
         
-        for _ in range(100):
+        for _ in range(1000):
             reward = self.evaluate(num_episodes=1)
             trained_rewards.append(reward)
             trained_conversions.append(self.env.total_conversions)
@@ -896,7 +896,7 @@ class ProductionMultiAgentSystem:
                        self.env.total_spend) / self.env.total_spend)
                 trained_roi.append(roi)
         
-        from src.experiment_utils import ExperimentResults
+        from experiment_utils import ExperimentResults
         trained_results = ExperimentResults(
             agent_name="Trained RL System",
             episode_rewards=trained_rewards,
@@ -964,7 +964,7 @@ def main():
         
         # Train
         print("\n[1/4] Training multi-agent system...")
-        system.train(num_episodes=100, eval_frequency=10, save_frequency=50)
+        system.train(num_episodes=1000, eval_frequency=100, save_frequency=100)
         
         # Run experiments
         print("\n[2/4] Running comprehensive experiments...")

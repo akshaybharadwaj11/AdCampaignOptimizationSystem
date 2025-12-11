@@ -208,3 +208,4 @@ __marimo__/
 .env
 figures_for_report/
 .DS_Store
+experiments/
