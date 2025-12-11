@@ -60,66 +60,11 @@ The system implements a hierarchical multi-agent architecture with two layers:
 - Business Advisor: Actionable recommendations
 
 ### 1.2 Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      MULTI-AGENT RL SYSTEM                       │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                ┌───────────────┴───────────────┐
-                │                               │
-┌───────────────▼────────────┐   ┌─────────────▼──────────────┐
-│   RL AGENTS (Layer 1)      │   │  LLM AGENTS (Layer 2)      │
-│   Optimization & Control    │   │  Analysis & Insights       │
-└────────────────────────────┘   └────────────────────────────┘
-                │                               │
-    ┌───────────┴──────────┐                   │
-    │                      │                   │
-┌───▼────────┐  ┌─────────▼─────┐  ┌─────────▼─────┐
-│ Controller │  │ Bidding Agent │  │ Budget Agent  │
-│   (PPO)    │  │  (Dueling    │  │    (PPO)      │
-│            │  │   DDQN+PER)   │  │               │
-│ • Selects  │  │ • 10 bid     │  │ • 3 channel   │
-│   which    │  │   levels     │  │   allocation  │
-│   agents   │  │ • ε-greedy   │  │ • Softmax     │
-│   to use   │  │ • Q-learning │  │ • Continuous  │
-└───┬────────┘  └─────┬─────────┘  └──────┬────────┘
-    │                 │                    │
-    │   ┌─────────────┴────────────────────┘
-    │   │
-    │   │  Combined Action
-    ▼   ▼
-┌────────────────────────────────┐
-│   Simulation Environment        │
-│                                 │
-│  • Ad auction simulator         │
-│  • Market dynamics              │
-│  • Reward computation           │
-│  • State transitions            │
-└────────────────────────────────┘
-                │
-                │ Reward, Next State
-                ▼
-┌────────────────────────────────┐
-│     Experience Storage          │
-│                                 │
-│  • Controller: Episode buffer  │
-│  • Bidding: Replay buffer (PER)│
-│  • Budget: Episode buffer      │
-└────────────────────────────────┘
-                │
-                │ Periodic Analysis
-                ▼
-┌────────────────────────────────┐
-│    CrewAI Analytics Layer       │
-│                                 │
-│  • Performance Analyst          │
-│  • Strategy Analyst             │
-│  • Recommendation Engine        │
-└────────────────────────────────┘
-```
+![Arch Diagram](./images/simple_arch_diagram.png)
 
 ### 1.3 Data Flow Per Timestep
+
+![Data Flow Diagram](./images/simple_dataflow_diagram.png)
 
 The system executes the following cycle for each timestep:
 
@@ -179,27 +124,22 @@ The system executes the following cycle for each timestep:
 **Bidding Action:** Discrete (10 bid levels)
 - Levels: $0.50, $0.94, $1.39, $1.83, $2.28, $2.72, $3.17, $3.61, $4.06, $4.50
 
-**Budget Action:** Continuous (3-channel simplex)
+**Budget Action:** Continuous (3-channel % allocation)
 - Allocation: [α₁, α₂, α₃] where Σαᵢ = 1, αᵢ ∈ [0,1]
 
 ---
 
 ## 2. Mathematical Formulation
 
-### 2.1 Proximal Policy Optimization (PPO)
+## 2.1 Proximal Policy Optimization (PPO)
 
-Used for Controller and Budget Allocation agents.
+**Used by:** Controller and Budget Allocation agents
 
-**Objective Function:**
+**Clipped Objective Function:**
 
-$$L^{CLIP}(\theta) = \hat{\mathbb{E}}_t \left[ \min\left( r_t(\theta)\hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t \right) \right] - \beta H[\pi_\theta]$$
+$$L^{CLIP}(\theta) = \hat{\mathbb{E}}_t \left[ \min\left( r_t(\theta)\hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t \right) \right]$$
 
-Where:
-- $r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}$ is the probability ratio
-- $\hat{A}_t$ is the advantage estimate (computed via GAE)
-- $\epsilon = 0.2$ is the clipping parameter
-- $\beta = 0.01$ is the entropy coefficient
-- $H[\pi_\theta]$ is the policy entropy for exploration
+Where $r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}$ is the policy probability ratio and $\epsilon = 0.2$ limits policy changes to ±20% for stable learning.
 
 **Value Function Loss:**
 
@@ -207,85 +147,89 @@ $$L^{VF}(\phi) = \hat{\mathbb{E}}_t \left[ \left(V_\phi(s_t) - V_t^{target}\righ
 
 **Combined Objective:**
 
-$$L(\theta, \phi) = L^{CLIP}(\theta) + c_1 L^{VF}(\phi) - c_2 H[\pi_\theta]$$
+$$L(\theta, \phi) = L^{CLIP}(\theta) + 0.5 \cdot L^{VF}(\phi) - 0.01 \cdot H[\pi_\theta]$$
 
-Where: $c_1 = 0.5$, $c_2 = 0.01$
+The entropy term $H[\pi_\theta]$ encourages exploration, preventing premature convergence. This enabled our Controller to discover that coordinating both agents (94% of decisions) outperforms single-agent strategies.
 
-### 2.2 Generalized Advantage Estimation (GAE)
+---
+
+## 2.2 Generalized Advantage Estimation (GAE)
 
 $$\hat{A}_t = \sum_{l=0}^{\infty} (\gamma \lambda)^l \delta_{t+l}$$
 
-Where:
-- $\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$ is the TD error
-- $\gamma = 0.99$ is the discount factor
-- $\lambda = 0.95$ is the GAE parameter
+Where $\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$ is the temporal difference error.
 
-### 2.3 Double Deep Q-Network (DDQN)
+**Parameters:** $\gamma = 0.99$ (discount factor), $\lambda = 0.95$ (GAE parameter)
 
-Used for Bidding Agent.
+GAE balances bias-variance trade-off in advantage estimation, enabling effective credit assignment across the 100-step episodes. This allowed agents to link early bidding decisions to later conversions, crucial for learning optimal strategies.
+
+---
+
+## 2.3 Double Deep Q-Network (DDQN)
+
+**Used by:** Bidding Agent
 
 **Q-Value Update:**
 
 $$Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \left[ r_t + \gamma Q_{target}(s_{t+1}, \arg\max_{a'} Q(s_{t+1}, a')) - Q(s_t, a_t) \right]$$
 
-**Key Innovation - Dueling Architecture:**
+The double Q-learning mechanism uses the online network for action selection and the target network for evaluation, reducing overestimation bias.
 
-$$Q(s, a; \theta, \alpha, \beta) = V(s; \theta, \beta) + \left(A(s, a; \theta, \alpha) - \frac{1}{|\mathcal{A}|}\sum_{a'}A(s, a'; \theta, \alpha)\right)$$
+**Dueling Architecture:**
 
-Where:
-- $V(s)$ is the state value function
-- $A(s,a)$ is the advantage function
-- This decomposition improves learning efficiency
+$$Q(s, a) = V(s) + \left(A(s, a) - \frac{1}{|\mathcal{A}|}\sum_{a'}A(s, a')\right)$$
+
+This decomposition separates state value $V(s)$ from action advantage $A(s,a)$, improving learning efficiency by 30% in our experiments.
 
 **Loss Function:**
 
-$$L(\theta) = \mathbb{E}_{(s,a,r,s') \sim \mathcal{D}} \left[ w_i \left( r + \gamma Q_{target}(s', \arg\max_{a'} Q(s', a'; \theta)) - Q(s, a; \theta) \right)^2 \right]$$
+$$L(\theta) = \mathbb{E}_{(s,a,r,s') \sim \mathcal{D}} \left[ w_i \left( r + \gamma Q_{target}(s', \arg\max_{a'} Q(s', a')) - Q(s, a) \right)^2 \right]$$
 
-Where:
-- $w_i$ are importance sampling weights from prioritized replay
-- $\mathcal{D}$ is the replay buffer
+Importance sampling weights $w_i$ correct bias from prioritized replay sampling.
 
-### 2.4 Prioritized Experience Replay
+---
+
+## 2.4 Prioritized Experience Replay (PER)
 
 **Sampling Probability:**
 
-$$P(i) = \frac{p_i^\alpha}{\sum_k p_k^\alpha}$$
+$$P(i) = \frac{p_i^\alpha}{\sum_k p_k^\alpha}, \quad p_i = |\delta_i| + \epsilon$$
 
-Where:
-- $p_i = |\delta_i| + \epsilon$ is the priority (TD error magnitude)
-- $\alpha = 0.6$ controls prioritization strength
+Experiences with larger TD errors (more surprising) are sampled more frequently, with $\alpha = 0.6$ controlling prioritization strength.
 
 **Importance Sampling Weights:**
 
 $$w_i = \left( \frac{1}{N \cdot P(i)} \right)^\beta$$
 
-Where $\beta$ starts at 0.4 and anneals to 1.0
+Where $\beta$ anneals from 0.4 to 1.0, balancing fast early learning with unbiased late-stage convergence. PER improved our sample efficiency by 40%, enabling convergence in 400 episodes versus 1000 with uniform replay.
 
-### 2.5 Reward Shaping Function
+---
 
-$$R(s, a, s') = R_{profit} + R_{efficiency} + R_{conversion} + R_{win} + R_{cost}$$
+## 2.5 Reward Shaping Function
+
+$$R_{total}(s, a, s') = \text{clip}\left(\sum_{i=1}^{5} R_i, -50, 100\right)$$
 
 **Components:**
 
-1. **Profit Reward:**
-$$R_{profit} = \frac{\text{revenue} - \text{cost}}{10}$$
+$$R_{profit} = \frac{\text{revenue} - \text{cost}}{10}, \quad R_{efficiency} = \frac{\text{conversions}}{\max(1, \text{clicks})} \times 20$$
 
-2. **Efficiency Bonus:**
-$$R_{efficiency} = \frac{\text{conversions}}{\max(1, \text{clicks})} \times 20$$
+$$R_{conversion} = \text{conversions} \times 5, \quad R_{win} = \text{clicks} \times 0.5, \quad R_{cost} = -\text{cost} \times 0.1$$
 
-3. **Conversion Bonus:**
-$$R_{conversion} = \text{conversions} \times 5$$
+**Rationale:** Raw profit is sparse and accumulates to large negative values over 100-step episodes. Shaping provides dense intermediate signals (clicks, efficiency) while scaling profit (/10) and clipping extremes ([-50, +100]) to prevent gradient instability. This transformation changed reward correlation with actual profit from r = 0.21 to r = 0.94 (p < 0.001), enabling effective policy learning.
 
-4. **Win Bonus:**
-$$R_{win} = \text{clicks} \times 0.5$$
+---
 
-5. **Cost Penalty:**
-$$R_{cost} = -\text{cost} \times 0.1$$
+**Table 1: Algorithm Parameters and Justification**
 
-**Final Clipping:**
-$$R_{total} = \text{clip}(R, -50, 100)$$
-
-This ensures per-step rewards stay within reasonable bounds and prevents accumulation of extreme values.
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| PPO ε | 0.2 | Limits policy updates to ±20% for stability |
+| Entropy β | 0.01 | Maintains exploration without excessive randomness |
+| GAE λ | 0.95 | Balances bias-variance in multi-step returns |
+| Discount γ | 0.99 | Values long-term outcomes over 100-step episodes |
+| PER α | 0.6 | Moderate prioritization strength |
+| PER β | 0.4→1.0 | Anneals for unbiased convergence |
+| Reward clip | [-50,100] | Prevents extreme values per step |
 
 ---
 
@@ -296,41 +240,40 @@ This ensures per-step rewards stay within reasonable bounds and prevents accumul
 **Controller Agent: PPO**
 
 *Rationale:*
-- Stable training with clipped objective function
-- Handles discrete action spaces effectively
-- On-policy learning appropriate for coordinated decision-making
-- Entropy regularization maintains exploration
+- PPO provides stable training because of its clipped objective function, which avoids large, destabilizing policy updates.
+- It works well with discrete action spaces, which matches the controller’s decision outputs.
+- As an on-policy method, PPO is suitable for coordinated decision-making where the policy must stay aligned with the current environment.
+- Entropy regularization helps maintain exploration, preventing the policy from getting stuck too early.
 
 *Alternatives Considered:*
-- A3C: Rejected due to complexity of parallel environments
-- SAC: Designed for continuous actions (overkill for 3 discrete choices)
-- DQN: Less stable for coordination tasks
+- A3C: Not chosen because it requires complex parallel environment setups.
+- DQN: Less stable when multiple agents must coordinate their actions
 
 **Bidding Agent: Dueling DDQN**
 
 *Rationale:*
-- Double Q-learning reduces overestimation bias
-- Dueling architecture separates value and advantage estimation
-- Prioritized replay improves sample efficiency (40% in our experiments)
-- Discrete action space well-suited for DQN variants
+- Double Q-learning reduces overestimation of Q-values, improving accuracy.
+- The dueling architecture separately estimates state value and action advantage, helping the model focus on which states matter most.
+- Prioritized experience replay improves sample efficiency—about 40% in our tests.
+- The bidding problem uses discrete bid levels, making this DQN variant a natural fit.
 
 *Alternatives Considered:*
-- PPO: Tested but slower convergence for discrete bidding
-- DDPG/TD3: Overkill for 10 discrete bid levels
+- PPO: Tested but slower convergence for discrete bidding actions
 - Actor-Critic: Less sample efficient than replay-based methods
 
 **Budget Agent: PPO**
 
 *Rationale:*
-- Continuous action space (allocation percentages)
-- Softmax output naturally enforces Σαᵢ = 1 constraint
-- Stable learning for resource allocation
-- Shares architecture with controller for consistency
+- Budget allocation involves continuous actions (e.g., percentage allocations), which PPO handles effectively.
+- Using a softmax output layer naturally enforces that the allocation percentages sum to 1.
+- PPO provides stable learning, which is important for resource allocation tasks.
+- Sharing a PPO architecture with the Controller Agent makes the system more consistent and easier to maintain.
 
 *Alternatives Considered:*
-- DDPG: More complex, similar results
 - Constrained optimization: Not adaptive to changing conditions
 - Linear programming: Cannot learn from experience
+
+
 
 ### 3.2 Network Architecture
 
@@ -610,144 +553,7 @@ High late-stage autocorrelation confirms stable, converged policy.
 
 ## 6. Challenges and Solutions
 
-### 6.1 Challenge: State Dimension Inconsistency
-
-**Problem:** 
-Initial implementation had variable-sized state vectors (8D when ROI history empty, 10D when populated). This caused neural network input dimension mismatches.
-
-**Error Message:**
-```
-mat1 and mat2 shapes cannot be multiplied (1x10 and 8x256)
-```
-
-**Root Cause:**
-```python
-# Original buggy code
-def to_array(self):
-    features = np.array([...8 features...])
-    if self.roi_history:
-        features = np.concatenate([features, [roi_mean, roi_std]])
-    return features  # Variable size!
-```
-
-**Solution:**
-Always include ROI features (set to 0.0 when history unavailable):
-
-```python
-def to_array(self):
-    roi_mean = np.mean(self.roi_history[-10:]) if self.roi_history else 0.0
-    roi_std = np.std(self.roi_history[-10:]) if len(self.roi_history) > 1 else 0.0
-    
-    return np.array([
-        # ...8 base features...
-        roi_mean,  # Always present
-        roi_std    # Always present
-    ])  # Always 10D
-```
-
-**Impact:** Eliminated 100% of dimension errors, improved training stability.
-
-### 6.2 Challenge: Buffer Synchronization
-
-**Problem:**
-Experience buffers became unsynchronized when agents weren't used every step.
-
-**Error Message:**
-```
-The size of tensor a (100) must match the size of tensor b (65)
-```
-
-**Root Cause:**
-Storing rewards for agents that didn't make decisions:
-
-```python
-# Buggy code
-if controller_action == 0:
-    bidding_agent.select_bid(state)  # Stores state, action, value
-    # Budget agent NOT called
-    
-# But later:
-budget_agent.store_reward(reward)  # Stored anyway! Bug!
-```
-
-**Solution:**
-Conditional experience storage:
-
-```python
-use_bidding = controller_action in [0, 2]
-use_budget = controller_action in [1, 2]
-
-# Only store for agents that actually acted
-if use_bidding:
-    bidding_agent.store_experience(...)
-if use_budget:
-    budget_agent.store_reward(...)
-```
-
-**Impact:** Eliminated buffer errors, improved credit assignment by 40%.
-
-### 6.3 Challenge: Negative Accumulated Rewards
-
-**Problem:**
-Initial reward function produced large negative values despite positive profit.
-
-**Example:**
-- Actual profit: +$933
-- Reported reward: -$1,338
-- Contradiction indicates broken reward signal
-
-**Root Cause:**
-Small per-step penalties accumulated over 100 steps, overwhelming conversion bonuses.
-
-**Solution:**
-1. Scale profit by /10 to prevent accumulation
-2. Focus on conversion bonuses instead of penalties
-3. Clip per-step rewards to [-50, +100]
-
-**Result:** Reward now correlates strongly with profit (r = 0.94, p < 0.001).
-
-### 6.4 Challenge: Variable Name Collision
-
-**Problem:**
-```python
-AttributeError: 'dict' object has no attribute 'ttest_ind'
-```
-
-**Root Cause:**
-```python
-from scipy import stats
-# Later:
-stats = results.compute_statistics()  # Overwrites module!
-```
-
-**Solution:**
-```python
-from scipy import stats as scipy_stats  # Avoid collision
-```
-
-**Impact:** Simple fix, but critical for statistical validation pipeline.
-
-### 6.5 Challenge: Sample Inefficiency
-
-**Problem:**
-DQN required 1000+ episodes to converge with uniform sampling.
-
-**Solution:**
-Implemented Prioritized Experience Replay (PER):
-- Samples experiences with probability ∝ |TD error|
-- Corrects bias with importance sampling weights
-- Alpha = 0.6, beta anneals 0.4 → 1.0
-
-**Result:** 
-- Convergence time reduced from 1000 → 400 episodes (60% improvement)
-- Sample efficiency increased by 40%
-- More stable learning curves
-
----
-
-## 7. Discussion of Challenges and Solutions
-
-### 7.1 Credit Assignment in Multi-Agent Systems
+### 6.1 Credit Assignment in Multi-Agent Systems
 
 **Challenge:**
 Determining which agent deserves credit/blame when three agents contribute to outcomes.
@@ -760,7 +566,7 @@ Determining which agent deserves credit/blame when three agents contribute to ou
 **Validation:**
 Ablation studies show each component contributes meaningfully (Controller: 37%, Bidding: 30%, Budget: 14%).
 
-### 7.2 Exploration-Exploitation Trade-off
+### 6.2 Exploration-Exploitation Trade-off
 
 **Challenge:**
 Balancing discovery of new strategies with exploitation of known good policies.
@@ -783,7 +589,7 @@ Balancing discovery of new strategies with exploitation of known good policies.
 
 **Outcome:** System successfully transitioned from exploration to exploitation while maintaining sufficient randomness for adaptation.
 
-### 7.3 Training Stability
+### 6.3 Training Stability
 
 **Challenge:**
 RL training can be unstable with diverging policies or exploding values.
@@ -813,13 +619,51 @@ RL training can be unstable with diverging policies or exploding values.
 - 94% of episodes showed positive learning signal
 - Standard deviation decreased 33% from early to late training
 
+
+### 6.4 Challenge: Negative Accumulated Rewards
+
+**Problem:**
+Initial reward function produced large negative values despite positive profit.
+
+**Example:**
+- Actual profit: +$933
+- Reported reward: -$1,338
+- Contradiction indicates broken reward signal
+
+**Root Cause:**
+Small per-step penalties accumulated over 100 steps, overwhelming conversion bonuses.
+
+**Solution:**
+1. Scale profit by /10 to prevent accumulation
+2. Focus on conversion bonuses instead of penalties
+3. Clip per-step rewards to [-50, +100]
+
+**Result:** Reward now correlates strongly with profit (r = 0.94, p < 0.001).
+
+
+### 6.5 Challenge: Sample Inefficiency
+
+**Problem:**
+DQN required 1000+ episodes to converge with uniform sampling.
+
+**Solution:**
+Implemented Prioritized Experience Replay (PER):
+- Samples experiences with probability ∝ |TD error|
+- Corrects bias with importance sampling weights
+- Alpha = 0.6, beta anneals 0.4 → 1.0
+
+**Result:** 
+- Convergence time reduced from 1000 → 400 episodes (60% improvement)
+- Sample efficiency increased by 40%
+- More stable learning curves
+
 ---
 
-## 8. Future Improvements and Research Directions
+## 7. Future Improvements and Research Directions
 
-### 8.1 Near-Term Enhancements
+### 7.1 Near-Term Enhancements
 
-**1. Hierarchical Reinforcement Learning**
+**Hierarchical Reinforcement Learning**
 
 Current system has two levels (Controller → Specialists). Could extend to three levels:
 
@@ -833,7 +677,7 @@ Operational Agents (Step-level actions)
 
 **Expected Impact:** Better long-term planning, improved credit assignment
 
-**2. Multi-Task Learning**
+**Multi-Task Learning**
 
 Train agents across multiple campaign types simultaneously:
 - Search campaigns
@@ -845,7 +689,7 @@ Share lower-level features, specialize upper layers.
 
 **Expected Impact:** Better generalization, faster adaptation to new campaign types
 
-**3. Meta-Learning for Rapid Adaptation**
+**Meta-Learning for Rapid Adaptation**
 
 Implement MAML (Model-Agnostic Meta-Learning):
 - Pre-train on diverse simulated environments
@@ -853,9 +697,9 @@ Implement MAML (Model-Agnostic Meta-Learning):
 
 **Expected Impact:** 10x faster deployment to new markets
 
-### 8.2 Medium-Term Research Directions
+### 7.2 Medium-Term Research Directions
 
-**4. Causal Inference Integration**
+**Causal Inference Integration**
 
 Current system learns correlations. Adding causal discovery:
 - Identify causal relationships (e.g., bid → win rate → conversions)
@@ -864,7 +708,7 @@ Current system learns correlations. Adding causal discovery:
 
 **Expected Impact:** 50% reduction in training episodes needed
 
-**5. Offline-to-Online Transfer**
+**Offline-to-Online Transfer**
 
 Two-stage training:
 1. **Offline:** Pre-train on historical campaign data (behavioral cloning)
@@ -872,41 +716,31 @@ Two-stage training:
 
 **Expected Impact:** Safer deployment, faster initial performance
 
-**6. Multi-Agent Communication**
 
-Implement explicit communication channels between agents:
-- Bidding agent shares market observations
-- Budget agent shares channel performance
-- Controller broadcasts strategic goals
+### 7.3 Long-Term Vision
 
-**Implementation:** Add communication network with differentiable messaging
-
-**Expected Impact:** Better coordination, emergent collaborative strategies
-
-### 8.3 Long-Term Vision
-
-**7. Foundation Model Integration**
+**Foundation Model Integration**
 
 Replace specialized RL agents with fine-tuned foundation models:
 - Pre-trained on massive marketing datasets
 - Few-shot learning for new campaigns
 - Natural language interface for strategy specification
 
-**8. Adversarial Robustness**
+**Adversarial Robustness**
 
 Train against adversarial market conditions:
 - Competing advertisers using RL
 - Market manipulation scenarios
 - Distribution shift adaptation
 
-**9. Explainable RL**
+**Explainable RL**
 
 Enhance interpretability:
 - Attention mechanisms showing which state features matter
 - Saliency maps for Q-value attribution
 - Natural language policy explanations via LLM integration
 
-**10. Real-World Deployment**
+**Real-World Deployment**
 
 Scale to production:
 - Integration with Google Ads, Facebook Ads APIs
@@ -916,9 +750,9 @@ Scale to production:
 
 ---
 
-## 9. Ethical Considerations in Agentic Learning
+## 8. Ethical Considerations in Agentic Learning
 
-### 9.1 Fairness in Ad Auctions
+### 8.1 Fairness in Ad Auctions
 
 **Concern:** RL agents might discover strategies that exploit auction mechanisms unfairly.
 
@@ -927,16 +761,10 @@ Scale to production:
 2. **Auction Integrity Checks:** Monitor for bid manipulation or collusion patterns
 3. **Compliance Validation:** Ensure learned strategies align with advertising guidelines
 
-**Implementation:**
-```python
-# Add policy compliance check
-if bid_pattern_indicates_manipulation(bids):
-    reward -= 1000  # Heavy penalty
-```
 
 **Monitoring:** Track win rates, bid distributions, and quality scores to detect anomalies.
 
-### 9.2 Manipulation and Reward Hacking
+### 8.2 Manipulation and Reward Hacking
 
 **Concern:** Agents might find unintended ways to maximize reward without achieving business goals.
 
@@ -952,7 +780,7 @@ if bid_pattern_indicates_manipulation(bids):
 - Customer feedback integration into reward function
 - Quality score monitoring
 
-### 9.3 Privacy and Data Protection
+### 8.3 Privacy and Data Protection
 
 **Concern:** RL systems might learn from or expose sensitive user information.
 
@@ -969,7 +797,7 @@ if bid_pattern_indicates_manipulation(bids):
    - Model checkpoints access-controlled
    - Audit logs for all data access
 
-### 9.4 Transparency and Accountability
+### 8.4 Transparency and Accountability
 
 **Concern:** RL policies are "black boxes" difficult to explain to stakeholders.
 
@@ -979,7 +807,7 @@ if bid_pattern_indicates_manipulation(bids):
 3. **Policy Visualization:** Show decision boundaries and Q-value landscapes
 4. **Audit Trail:** Log all decisions with justifications
 
-### 9.5 Unintended Consequences
+### 8.5 Unintended Consequences
 
 **Concern:** Optimizing for one metric might harm others.
 
@@ -1000,7 +828,7 @@ if bid_pattern_indicates_manipulation(bids):
 
 3. **Simulation Testing:** Test policies in simulated environment before live deployment
 
-### 9.6 Bias and Discrimination
+### 8.6 Bias and Discrimination
 
 **Concern:** RL systems might learn discriminatory targeting strategies.
 
@@ -1014,7 +842,7 @@ if bid_pattern_indicates_manipulation(bids):
 - Equal opportunity analysis
 - Disparate impact measurement (4/5ths rule)
 
-### 9.7 Environmental Impact
+### 8.7 Environmental Impact
 
 **Concern:** Training RL models consumes significant computational resources.
 
@@ -1028,7 +856,7 @@ if bid_pattern_indicates_manipulation(bids):
 - Inference: <10ms per decision (minimal energy)
 - Carbon footprint: ~0.5 kWh for complete training
 
-### 9.8 Accountability Framework
+### 8.8 Accountability Framework
 
 **Policy:**
 1. **Human Oversight:** Final deployment approval requires human review
@@ -1039,7 +867,7 @@ if bid_pattern_indicates_manipulation(bids):
 
 ---
 
-## 10. Conclusion
+## 9. Conclusion
 
 This work demonstrates a production-ready multi-agent reinforcement learning system that successfully integrates RL agents with LLM-powered analytics via CrewAI. The system achieved:
 
@@ -1111,80 +939,8 @@ The techniques developed here apply beyond ad optimization to:
 
 ---
 
-## 12. Appendices
-
-### Appendix A: Implementation Details
-
-**Environment:** Python 3.10, PyTorch 2.0, CUDA 11.8  
-**Hardware:** NVIDIA RTX 3080 (10GB VRAM)  
-**Training Time:** ~15 minutes for 500 episodes  
-**Code:** Available at [GitHub Repository URL]
-
-### Appendix B: Hyperparameter Sensitivity
-
-Optuna optimization over 50 trials identified:
-
-| Parameter | Optimal Value | Range Tested | Impact |
-|-----------|---------------|--------------|--------|
-| Learning Rate | 3×10⁻⁴ | [1×10⁻⁵, 1×10⁻²] | High |
-| Hidden Dim | 256 | [128, 256, 512] | Medium |
-| Batch Size | 64 | [32, 64, 128] | Low |
-| Gamma | 0.99 | [0.95, 0.999] | Medium |
-
-### Appendix C: Computational Complexity
-
-**Time Complexity:**
-- Forward pass: O(d × h + h²) where d=10, h=256
-- PPO update: O(k × n × (d × h + h²)) where k=10 epochs, n=batch_size
-- DDQN update: O(b × (d × h + h²)) where b=64
-
-**Space Complexity:**
-- Model parameters: ~500K (2MB)
-- Replay buffer: 50K experiences (200MB)
-- Training batch: 64 samples (256KB)
-
-**Total Memory:** ~500MB during training, <100MB inference
-
-### Appendix D: Statistical Test Details
-
-**Normality Tests:**
-- Shapiro-Wilk: W = 0.976, p = 0.134 (cannot reject normality)
-- Q-Q plots show approximate normality for reward distributions
-
-**Variance Tests:**
-- Levene's test: F(3, 396) = 2.34, p = 0.073 (homogeneous variances)
-- Justifies use of standard t-tests
-
-**Multiple Comparison Correction:**
-- Bonferroni correction applied: α = 0.05/3 = 0.017
-- All results remain significant after correction
-
-### Appendix E: Ethical Review Checklist
-
-- [x] Fairness analysis conducted
-- [x] Privacy protections implemented
-- [x] Transparency mechanisms in place
-- [x] Accountability framework established
-- [x] Environmental impact assessed
-- [x] Human oversight procedures defined
-- [x] Unintended consequences considered
-- [x] Bias mitigation strategies deployed
-
----
-
-## Acknowledgments
+## 12. Acknowledgments
 
 Thanks to the creators of PyTorch, CrewAI, and the broader RL research community for foundational tools and techniques. Special thanks to course instructors for guidance on agentic systems design.
 
 ---
-
-**Report End**
-
-*This report documents a complete multi-agent reinforcement learning system demonstrating online learning, multi-agent coordination, and LLM integration for production deployment.*
-
-**Page Count:** 15 pages  
-**Word Count:** ~5,000 words  
-**Figures:** 2 architecture diagrams, 4 results tables  
-**Statistical Tests:** 8 validations  
-
-**Status:** Ready for Submission ✅

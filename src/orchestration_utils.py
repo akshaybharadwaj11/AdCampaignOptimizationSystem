@@ -1,5 +1,5 @@
 """
-Multi-Agent RL System - Part 3: Complete Integration & Production Features
+Multi-Agent RL System : Complete Integration & Production Features
 ===========================================================================
 
 This module contains:
@@ -27,7 +27,7 @@ import time
 from collections import defaultdict
 import warnings
 warnings.filterwarnings('ignore')
-from experiment_utils import *
+from src.experiment_utils import *
 logger = logging.getLogger(__name__)
 
 
@@ -611,7 +611,7 @@ class TestSuite:
 class ProductionMultiAgentSystem:
     """Complete production-ready multi-agent RL system"""
     def __init__(self, config: Dict[str, Any] = None):
-        from agent_utils import (EnhancedControllerAgent, EnhancedBiddingAgent, 
+        from src.agent_utils import (EnhancedControllerAgent, EnhancedBiddingAgent, 
                           EnhancedBudgetAgent, EnhancedSimulationAgent,
                           AgentConfig, EnvironmentConfig, Action)
         
@@ -813,7 +813,7 @@ class ProductionMultiAgentSystem:
                     bid, _ = self.bidding_agent.select_bid(state_array, training=False)
                     allocation = self.budget_agent.select_allocation(state_array, training=False)
                 
-                from agent_utils import Action
+                from src.agent_utils import Action
                 action = Action(bid_amount=bid, budget_allocation=allocation, agent_type="both")
                 
                 next_state, reward, done, info = self.env.step(action)
@@ -896,7 +896,7 @@ class ProductionMultiAgentSystem:
                        self.env.total_spend) / self.env.total_spend)
                 trained_roi.append(roi)
         
-        from experiment_utils import ExperimentResults
+        from src.experiment_utils import ExperimentResults
         trained_results = ExperimentResults(
             agent_name="Trained RL System",
             episode_rewards=trained_rewards,
@@ -964,7 +964,7 @@ def main():
         
         # Train
         print("\n[1/4] Training multi-agent system...")
-        system.train(num_episodes=2000, eval_frequency=100, save_frequency=100)
+        system.train(num_episodes=100, eval_frequency=10, save_frequency=50)
         
         # Run experiments
         print("\n[2/4] Running comprehensive experiments...")
@@ -991,12 +991,7 @@ def main():
         print("- monitoring/: Real-time metrics and dashboard")
         print("- models/: Trained model checkpoints")
         print("- ablation_studies/: Component importance analysis")
-        # print("\nNext Steps:")
-        # print("1. Review experiment_report.txt for detailed analysis")
-        # print("2. Check monitoring/dashboard.png for system health")
-        # print("3. Use learning_curves.png for publication-ready figures")
-        # print("4. Deploy models/ directory for production use")
-    
+
     except Exception as e:
         logger.error(f"Main execution failed: {e}")
         import traceback

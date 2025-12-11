@@ -200,7 +200,7 @@ class ExperimentRunner:
                 bid, bid_idx = agent.select_bid(state_array)
                 allocation = agent.select_allocation(state_array)
                 
-                from agent_utils import Action  # Import from main module
+                from src.agent_utils import Action  # Import from main module
                 action = Action(
                     bid_amount=bid,
                     budget_allocation=allocation,
@@ -448,7 +448,7 @@ class AblationStudy:
                 bid, _ = system.bidding_agent.select_bid(state_array)
                 allocation = system.budget_agent.select_allocation(state_array)
                 
-                from agent_utils import Action
+                from src.agent_utils import Action
                 action = Action(bid_amount=bid, budget_allocation=allocation, agent_type="both")
                 
                 next_state, reward, done, info = env.step(action)
@@ -481,7 +481,7 @@ class AblationStudy:
                 
                 allocation = system.budget_agent.select_allocation(state_array)
                 
-                from agent_utils import Action
+                from src.agent_utils import Action
                 action = Action(bid_amount=fixed_bid, budget_allocation=allocation, agent_type="budget")
                 
                 next_state, reward, done, info = env.step(action)
@@ -514,7 +514,7 @@ class AblationStudy:
                 
                 bid, _ = system.bidding_agent.select_bid(state_array)
                 
-                from agent_utils import Action
+                from src.agent_utils import Action
                 action = Action(bid_amount=bid, budget_allocation=fixed_allocation, agent_type="bidding")
                 
                 next_state, reward, done, info = env.step(action)
@@ -586,7 +586,7 @@ class HyperparameterOptimizer:
         epsilon_decay = trial.suggest_uniform('epsilon_decay', 0.99, 0.999)
         
         # Create config
-        from agent_utils import AgentConfig, EnhancedControllerAgent, EnhancedSimulationAgent
+        from src.agent_utils import AgentConfig, EnhancedControllerAgent, EnhancedSimulationAgent
         
         config = AgentConfig(
             learning_rate=lr,
@@ -613,7 +613,7 @@ class HyperparameterOptimizer:
                     action, _, _ = controller.select_action(state_array)
                     
                     # Simplified action execution
-                    from agent_utils import Action
+                    from src.agent_utils import Action
                     act = Action(bid_amount=2.0, budget_allocation={}, agent_type="both")
                     
                     next_state, reward, done, info = env.step(act)
